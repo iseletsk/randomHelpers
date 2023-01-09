@@ -1,0 +1,5 @@
+gdrive:
+  tag-file-id: 1-gDrive-FILE-with-categories-tags-p
+  dest-folder-id: 1-gdrive-FOLDER-ID-V
+  secret-file: credentials/client_secret_file.apps.googleusercontent.com.json
+  cred-file: credentials/google-credentials.pkl
