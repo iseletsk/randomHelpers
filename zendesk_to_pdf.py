@@ -1,4 +1,3 @@
-import html
 import os
 from datetime import datetime
 from dateutils import relativedelta
@@ -16,6 +15,8 @@ import random
 
 import argparse
 import yaml
+
+import utils
 
 ENCODING = 'UTF-8'
 
@@ -405,6 +406,7 @@ def upload_to_gdrive(drive_service, filename, folder_id, path_to_file):
     print(F'File with ID: "{file.get("id")}" has been uploaded.')
     print(F'https://drive.google.com/file/d/{file.get("id")}/view?usp=sharing')
     print('File ID: %s' % file.get('id'))
+    return file.get('id'), f'https://drive.google.com/file/d/{file.get("id")}/view?usp=sharing'
 
 
 SUPPORT_TICKETS_EXPORT_FOLDER = ''
@@ -468,8 +470,19 @@ def recurrent_export(now, days_ago, months_ago, pdf_export=False, gdrive_upload=
             upload_pdf_to_gdrive(RESULTS_DIR, target_folder_id, drive_service)
 
         if gdrive_upload:
-            upload_to_gdrive(drive_service, f'zendesk_tickets_{from_date}-{today}.zip', target_folder_id, f'{RESULTS_DIR}/zendesk_tickets_{from_date}.zip')
+            zip_id, zip_url = upload_to_gdrive(drive_service, f'zendesk_tickets_{from_date}-{today}.zip', target_folder_id, f'{RESULTS_DIR}/zendesk_tickets_{from_date}.zip')
+    return target_folder_id, zip_id, zip_url
 
+def send_slack_message(target_folder_id, zip_id, zip_url):
+    import utils
+    app, handler = utils.slack_connect_socket('slack_monthly_token.json')
+    message = """
+New zendesk ticket export is ready.
+Folder with PDF: https://drive.google.com/drive/folders/{target_folder_id}
+Zip archive: {zip_url}
+""".format(target_folder_id=target_folder_id, zip_url=zip_url)
+    app.client.chat_postMessage(channel='zendesk-monthly-export',
+                                text=message)
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Export support tickets to PDFs')
     main_parser.add_argument('--export-category', action='store_true', help='Export tickets by category')
@@ -485,7 +498,9 @@ if __name__ == '__main__':
         now = datetime.now()
         if args.today:
             now = datetime.strptime(args.today, "%Y-%m-%d")
-        recurrent_export(now, args.days, args.months, args.pdf_export, args.gdrive_upload)
+        target_folder_id, zip_id, zip_url = recurrent_export(now, args.days, args.months, args.pdf_export, args.gdrive_upload)
+        if args.gdrive_upload:
+            send_slack_message(target_folder_id, zip_id, zip_url)
     if args.auth:
         init_from_yaml()
         init_dirs(datetime.now().strftime("%Y-%m-%d"))

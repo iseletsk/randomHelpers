@@ -7,6 +7,7 @@ It should have:
 - client_secret... (google api)
 - zendesk_token.json (subdomain, login, api_key)
 - sendgrid_token.json (api_key, key_id, name)
+- slack_monthly_token.json (app_token, bot_token)
 
 ## zendesk_to_pdf.py 
 This script takes a list of categories & zendesk tasks from the gDrive, 
@@ -25,6 +26,6 @@ ELIF (INCLUDES_ALL([Ticket tags], "clos_kernel","kernel_module","product_questio
 ELIF (INCLUDES_ALL([Ticket tags], "clos_kernel","kernel_issue","product_question")) THEN "Question about kernel issue"
 ELIF (INCLUDES_ALL([Ticket tags], "clos_kernel","kernel_boot","product_question")) THEN "Question about kernel boot"
 ```
-
+Once uploaded notification is sent to slack channel zendesk-monthly-export
 
 
