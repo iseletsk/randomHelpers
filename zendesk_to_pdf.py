@@ -2,8 +2,6 @@ import os
 from datetime import datetime
 from dateutils import relativedelta
 
-import requests
-from requests.auth import HTTPBasicAuth
 import json
 from string import Template
 
@@ -16,43 +14,13 @@ import random
 import argparse
 import yaml
 
-import utils
+from utils_zendesk import call_zendesk
 
 ENCODING = 'UTF-8'
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
 CONFIG_DIR = 'config_dir'
-
-
-def call_zendesk(url, saveToFile = None, nextPage = False, loadFromFile = False):
-    if loadFromFile & os.path.exists(saveToFile):
-        with open(saveToFile) as f:
-            return json.load(f)
-    print(f'Calling {url}, cannot find file {saveToFile}')
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-
-    with open('credentials/zendesk_token.json') as f:
-        zendesk_credentials = json.load(f)
-        subdomain = zendesk_credentials['subdomain']
-        login = zendesk_credentials['login']+"/token"
-        api_key = zendesk_credentials['api_key']
-
-        if not nextPage:
-            url = f'https://{subdomain}.zendesk.com/api/v2/{url}'
-
-        r = requests.get(url, auth=HTTPBasicAuth(login, api_key), headers=headers)
-
-        if r.status_code != 200:
-            raise Exception(f'Unable to get url {url} - {r.status_code}')
-        if saveToFile:
-            with open(saveToFile, 'w') as f:
-                json.dump(r.json(), f, indent=2)
-        return r.json()
-
 
 
 def get_zendesk_ticket(ticket_id, loadFromFile = False):
