@@ -132,7 +132,7 @@ def ticket_category_to_html(category_name, ticket_list, loadFromFile = False):
         first_comment = comments['comments'][0]
         toc += f'<li><a href="#{ticket_id}">{ticket_id} | {ticket["ticket"]["subject"]}</a>' \
                 f' <a id="fc-{ticket_id}" class="first-comment-button"> ... </a>'\
-               f'<div id="fc-{ticket_id}-div" class="first-comment">{first_comment["html_body"][:2500]} ...</div>' \
+               f'<div id="fc-{ticket_id}-div" class="first-comment">{first_comment["html_body"]} ...</div>' \
                f'</li>\n'
     toc += "</ul>\n"
     toc += """<script>
@@ -196,23 +196,28 @@ def zendesk_tickets_by_tag(tag, created_after, loadFromFile = False):
 
 
 def zendesk_tickets_updated_after(after_date, loadFromFile = False):
+    zendesk_tickets_query(f'query=updated>{after_date}', after_date, loadFromFile=loadFromFile)
+    return load_all_tickets(after_date)
+
+def zendesk_tickets_query(query_string, suffix, loadFromFile = False):
     page = 1
-    tickets_json = call_zendesk(f'search/export.json?query=updated>{after_date}&filter[type]=ticket&page[size]=1000',
-                                saveToFile=f'{JSON_DIR}tickets.updated.{after_date}.{page}.json', loadFromFile=loadFromFile)
+    tickets_json = call_zendesk(f'search/export.json?{query_string}&filter[type]=ticket&page[size]=1000',
+                                saveToFile=f'{JSON_DIR}tickets.updated.{suffix}.{page}.json', loadFromFile=loadFromFile)
     while tickets_json['meta']['has_more']:
         page += 1
         print(f'page {page}')
         tickets_json = call_zendesk(tickets_json['links']['next'],
-                                    saveToFile=f'{JSON_DIR}tickets.updated.{after_date}.{page}.json',
+                                    saveToFile=f'{JSON_DIR}tickets.updated.{suffix}.{page}.json',
                                     nextPage=True, loadFromFile=loadFromFile)
-    return load_tickets_updated_after(after_date)
+    return load_all_tickets(suffix)
 
-def load_tickets_updated_after(after_date):
+
+def load_all_tickets(suffix):
     tickets = []
     page = 1
     while True:
         try:
-            with open(f'{JSON_DIR}tickets.updated.{after_date}.{page}.json', 'r') as f:
+            with open(f'{JSON_DIR}tickets.updated.{suffix}.{page}.json', 'r') as f:
                 tickets_json = json.load(f)
                 for ticket in tickets_json['results']:
                     if ticket['tags']:
@@ -431,7 +436,9 @@ def recurrent_export(now, days_ago, months_ago, pdf_export=False, gdrive_upload=
     download_from_gdrive(drive_service, TAG_FILE_ID, SUPPORT_TAGS)
 
     export_tickets_by_tag_category(from_date, loadFromFile=True, pdf_export=pdf_export)
-
+    target_folder_id = None
+    zip_id = None
+    zip_url = None
     if gdrive_upload:
         target_folder_id = create_folder_gdrive(drive_service, today, SUPPORT_TICKETS_EXPORT_FOLDER)
         if pdf_export:
@@ -451,9 +458,47 @@ Zip archive: {zip_url}
 """.format(target_folder_id=target_folder_id, zip_url=zip_url)
     app.client.chat_postMessage(channel='zendesk-monthly-export',
                                 text=message)
+group_ids = (360007455240, )
+product_name_field_id = 33267569
+question_type_field_id = 5191838013468
+#     "status": "solved",
+
+
+def export_by_queue(queue, from_date, loadFromFile=True):
+    suffix = f'queue-{from_date}'
+    zendesk_tickets_query(f'query=type:ticket queue:{queue} created>{from_date}', suffix, loadFromFile)
+    return load_all_tickets(suffix)
+
+def export_tickets_by_org(orgname, from_date, loadFromFile=True):
+    suffix = f'org-{from_date}'
+    zendesk_tickets_query(f'query=type:ticket organization:{orgname} created>{from_date}', suffix, loadFromFile)
+    return load_all_tickets(suffix)
+
+
+
+def org_export(orgname, now, days_ago, months_ago, pdf_export, gdrive_upload):
+    from_date = get_start_date(now, days_ago=days_ago, months_ago=months_ago)
+    today = now.strftime("%Y-%m-%d")
+    dest_dir = f"org-{today}"
+    init_dirs(dest_dir)
+    init_from_yaml()
+    tickets = export_tickets_by_org(orgname, from_date, loadFromFile=True)
+    ticket_list = [ticket[0] for ticket in tickets]
+    filename = ticket_category_to_html(orgname +".html", ticket_list, loadFromFile=True)
+    if pdf_export:
+        html_to_pdf(filename)
+    if gdrive_upload:
+        drive_service = gdrive_login()
+        target_folder_id = create_folder_gdrive(drive_service, dest_dir, SUPPORT_TICKETS_EXPORT_FOLDER)
+        if pdf_export:
+            upload_pdf_to_gdrive(RESULTS_DIR, target_folder_id, drive_service)
+            upload_to_gdrive(drive_service, filename, target_folder_id, RESULTS_DIR + filename)
+
+
 if __name__ == '__main__':
     main_parser = argparse.ArgumentParser(description='Export support tickets to PDFs')
     main_parser.add_argument('--export-category', action='store_true', help='Export tickets by category')
+    main_parser.add_argument('--export-org', type=str, help='Export by organization')
     main_parser.add_argument('--today', type=str, help='Consider today to be this date, in %Y-%m-%d format')
     main_parser.add_argument('--auth', action='store_true', help='Do Google Drive authentication')
     main_parser.add_argument('--days', type=int, default=0, help='Number of days to go back')
@@ -462,14 +507,18 @@ if __name__ == '__main__':
     main_parser.add_argument('--gdrive-upload', action='store_true', help='Export all tickets')
 
     args = main_parser.parse_args()
+
+    now = datetime.now()
+    if args.today:
+        now = datetime.strptime(args.today, "%Y-%m-%d")
+
     if args.export_category:
-        now = datetime.now()
-        if args.today:
-            now = datetime.strptime(args.today, "%Y-%m-%d")
         target_folder_id, zip_id, zip_url = recurrent_export(now, args.days, args.months, args.pdf_export, args.gdrive_upload)
         if args.gdrive_upload:
             send_slack_message(target_folder_id, zip_id, zip_url)
-    if args.auth:
+    elif args.export_org:
+        org_export(args.export_org, now, args.days, args.months, args.pdf_export, args.gdrive_upload)
+    elif args.auth:
         init_from_yaml()
-        init_dirs(datetime.now().strftime("%Y-%m-%d"))
+        init_dirs(now)
         gdrive_login()

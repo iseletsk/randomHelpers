@@ -9,3 +9,14 @@ def slack_connect_socket(cred_file_name):
         handler.connect()
         return app, handler
 
+def load_openai_creds():
+    with open('credentials/openai.json', 'r') as f:
+        creds = json.load(f)
+        import os
+        os.environ["OPENAI_API_KEY"] = creds['openai_api_key']
+        return creds
+
+def load_hubspot_creds():
+    with open('credentials/hubspot_token.json', 'r') as f:
+        creds = json.load(f)
+        return creds['api_key']

@@ -41,6 +41,8 @@ def article_to_doc(article):
     result['title'] = article['title']
     result['body'] = article['body'].replace(' ', ' ')
     result['html_url'] = article['html_url']
+    result['id'] = article['id']
+    result['internal'] = article['user_segment_id'] is not None
     return result
 
 def article_to_string(article):
@@ -55,7 +57,8 @@ def article_to_string(article):
     return buf
 
 
-def get_articles(sections=None, loadFromFile=False, skip_outdated=True, skip_draft=True, skip_internal=False):
+def get_articles(sections=None, loadFromFile=False, skip_outdated=True, skip_draft=True, skip_internal=False,
+                 export_json_file = None):
     articles_text = ""
     page = 1
     url = 'help_center/en-us/articles.json'
@@ -76,10 +79,9 @@ def get_articles(sections=None, loadFromFile=False, skip_outdated=True, skip_dra
     with open(f'{WORK_DIR}/articles.html', 'w', encoding="utf-8") as f:
         f.write(f'<html><body>{articles_text}</body></html>')
 
-
-    with open(f'{WORK_DIR}/articles-docs.json', 'w') as f_json:
-        json.dump(articles_docs, f_json, indent=4, ensure_ascii=False)
-
+    if export_json_file is not None:
+        with open(export_json_file, 'w') as f_json:
+            json.dump(articles_docs, f_json, indent=4, ensure_ascii=False)
 
 cl_sections = [
     360004078100,
@@ -97,5 +99,6 @@ cl_sections = [
     360004103260
 ]
 get_articles(sections=cl_sections,
-             loadFromFile=True, skip_outdated=True, skip_draft=True, skip_internal=True)
+             loadFromFile=True, skip_outdated=True, skip_draft=True, skip_internal=False,
+             export_json_file='/Users/iseletsk/lve/SupportBot/workdir/articles-docs.json')
 
