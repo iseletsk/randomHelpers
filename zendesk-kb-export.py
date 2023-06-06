@@ -43,6 +43,7 @@ def article_to_doc(article):
     result['html_url'] = article['html_url']
     result['id'] = article['id']
     result['internal'] = article['user_segment_id'] is not None
+    result['labels'] = article['label_names']
     return result
 
 def article_to_string(article):
